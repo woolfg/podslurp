@@ -1,0 +1,26 @@
+# secrets
+.env
+
+# virtual environment
+.venv/
+
+# Python bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# packaging / build
+*.egg-info/
+dist/
+build/
+.uv/
+
+# runtime output
+downloads/
+transcriptions/
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
+

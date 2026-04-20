@@ -121,7 +121,9 @@ def _run_pipeline(ep: dict, feed: dict, config) -> None:
     podcast_title: str = feed.get("title", "podcast")
     episode_title: str = ep.get("title", "episode")
     enclosure_url: str = ep.get("enclosureUrl", "")
-    feed_language: Optional[str] = ep.get("feedLanguage") or feed.get("language") or None
+    
+    raw_lang = ep.get("feedLanguage") or feed.get("language")
+    feed_language: Optional[str] = raw_lang.split("-")[0].lower() if raw_lang else None
 
     if not enclosure_url:
         console.print("[red]No audio URL found for this episode.[/red]")

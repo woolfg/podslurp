@@ -7,10 +7,11 @@ help:
 	@echo ""
 	@echo "Usage: make <target>"
 	@echo ""
-	@echo "  install   Create/update the virtual env and install all dependencies"
-	@echo "  run       Launch the interactive CLI"
-	@echo "  lint      Run ruff linter over the source"
-	@echo "  clean     Remove generated files (.venv, downloads, transcriptions, caches)"
+	@echo "  install      Create/update the virtual env and install all dependencies"
+	@echo "  run          Launch the interactive CLI"
+	@echo "  transcribe   Transcribe a local audio file (requires file=<path> [lang=<language>])"
+	@echo "  lint         Run ruff linter over the source"
+	@echo "  clean        Remove generated files (.venv, downloads, transcriptions, caches)"
 
 install:
 	@if [ ! -f .env ]; then \
@@ -21,6 +22,17 @@ install:
 
 run:
 	uv run podslurp
+
+transcribe:
+	@if [ -z "$(file)" ]; then \
+		echo "Usage: make transcribe file=<path_to_audio> [lang=<language>]"; \
+		exit 1; \
+	fi
+	@if [ -n "$(lang)" ]; then \
+		uv run podslurp --transcribe "$(file)" --lang "$(lang)"; \
+	else \
+		uv run podslurp --transcribe "$(file)"; \
+	fi
 
 lint:
 	uv run ruff check podslurp/

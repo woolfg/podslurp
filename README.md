@@ -43,6 +43,14 @@ make run
 uv run podslurp
 ```
 
+If you already have an audio file downloaded and just want to transcribe it, use:
+
+```bash
+make transcribe file=downloads/my_audio.mp3
+# Or optionally pass a language hint (e.g. 'en', 'de'):
+make transcribe file=downloads/my_audio.mp3 lang=en
+```
+
 The CLI is fully interactive:
 
 ```
@@ -88,24 +96,24 @@ Transcription saved:
 
 All settings live in `.env`:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PODCASTINDEX_API_KEY` | — | **Required.** Your PodcastIndex API key |
-| `PODCASTINDEX_API_SECRET` | — | **Required.** Your PodcastIndex API secret |
-| `WHISPER_MODEL` | `large-v3` | Model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
-| `WHISPER_DEVICE` | `cpu` | `cpu` or `cuda` |
-| `WHISPER_COMPUTE_TYPE` | `int8` | `int8` (CPU), `float16` (GPU), `int8_float16` (GPU, lower VRAM) |
-| `PODSLURP_OUTPUT_DIR` | `./transcriptions` | Where transcript files are written |
-| `PODSLURP_DOWNLOAD_DIR` | `./downloads` | Where audio files are saved |
+| Variable                  | Default            | Description                                                        |
+| ------------------------- | ------------------ | ------------------------------------------------------------------ |
+| `PODCASTINDEX_API_KEY`    | —                  | **Required.** Your PodcastIndex API key                            |
+| `PODCASTINDEX_API_SECRET` | —                  | **Required.** Your PodcastIndex API secret                         |
+| `WHISPER_MODEL`           | `large-v3`         | Model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
+| `WHISPER_DEVICE`          | `cpu`              | `cpu` or `cuda`                                                    |
+| `WHISPER_COMPUTE_TYPE`    | `int8`             | `int8` (CPU), `float16` (GPU), `int8_float16` (GPU, lower VRAM)    |
+| `PODSLURP_OUTPUT_DIR`     | `./transcriptions` | Where transcript files are written                                 |
+| `PODSLURP_DOWNLOAD_DIR`   | `./downloads`      | Where audio files are saved                                        |
 
 ### Choosing a Whisper model
 
-| Model | Speed (CPU) | Accuracy | Notes |
-|---|---|---|---|
-| `tiny` / `base` | Very fast | Lower | Good for quick drafts |
-| `small` | Fast | Good | Solid for most podcasts |
-| `large-v3` | Slow | Best | Recommended default |
-| `turbo` | Fast | Near large-v3 | Best speed/accuracy tradeoff (GPU recommended) |
+| Model           | Speed (CPU) | Accuracy      | Notes                                          |
+| --------------- | ----------- | ------------- | ---------------------------------------------- |
+| `tiny` / `base` | Very fast   | Lower         | Good for quick drafts                          |
+| `small`         | Fast        | Good          | Solid for most podcasts                        |
+| `large-v3`      | Slow        | Best          | Recommended default                            |
+| `turbo`         | Fast        | Near large-v3 | Best speed/accuracy tradeoff (GPU recommended) |
 
 ### GPU usage
 
@@ -118,16 +126,18 @@ WHISPER_COMPUTE_TYPE=float16
 
 ## Makefile targets
 
-| Command | Description |
-|---|---|
-| `make install` | Set up the virtual env and install all dependencies |
-| `make run` | Launch the interactive CLI |
-| `make lint` | Run `ruff` over the source |
-| `make clean` | Remove `.venv`, `downloads/`, `transcriptions/`, caches |
+| Command           | Description                                                      |
+| ----------------- | ---------------------------------------------------------------- |
+| `make install`    | Set up the virtual env and install all dependencies              |
+| `make run`        | Launch the interactive CLI                                       |
+| `make transcribe` | Transcribe a local audio file (`file=path/to.mp3` `[lang=code]`) |
+| `make lint`       | Run `ruff` over the source                                       |
+| `make clean`      | Remove `.venv`, `downloads/`, `transcriptions/`, caches          |
 
 ## Output files
 
 ### `.txt`
+
 ```
 Podcast:           Lex Fridman Podcast
 Episode:           Elon Musk: War, AI & the Future of Humanity
@@ -142,6 +152,7 @@ Joe Rogan: Welcome back. Today my guest is...
 ```
 
 ### `.json`
+
 ```json
 {
   "metadata": {

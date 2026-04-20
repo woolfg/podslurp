@@ -4,6 +4,7 @@ __main__.py — interactive CLI entry point for podslurp.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
@@ -137,9 +138,13 @@ def _run_pipeline(ep: dict, feed: dict, config) -> None:
     audio_filename = stem + suffix
 
     # 1. Download
-    console.print(f"\n[bold]Downloading:[/bold] {audio_filename}")
-    audio_path = download_audio(enclosure_url, config.download_dir, audio_filename)
-    console.print(f"[green]Saved to:[/green] {audio_path}")
+    audio_path = config.download_dir / audio_filename
+    if audio_path.exists() and audio_path.stat().st_size > 0:
+        console.print(f"\n[bold]Audio already downloaded:[/bold] {audio_path}")
+    else:
+        console.print(f"\n[bold]Downloading:[/bold] {audio_filename}")
+        audio_path = download_audio(enclosure_url, config.download_dir, audio_filename)
+        console.print(f"[green]Saved to:[/green] {audio_path}")
 
     # 2. Transcribe
     console.print(
@@ -173,6 +178,43 @@ def _run_pipeline(ep: dict, feed: dict, config) -> None:
 
 def main() -> None:
     config = load_config()
+
+    if len(sys.argv) >= 3 and sys.argv[1] == "--transcribe":
+        audio_path = Path(sys.argv[2])
+        feed_language = None
+        if len(sys.argv) >= 5 and sys.argv[3] == "--lang":
+            feed_language = sys.argv[4]
+
+        if not audio_path.exists() or not audio_path.is_file():
+            console.print(f"[red]Error:[/red] File not found or is not a file: {audio_path}")
+            sys.exit(1)
+
+        lang_str = f" (language hint: {feed_language})" if feed_language else " (auto-detect language)"
+        console.print(
+            f"\n[bold]Transcribing[/bold] with [cyan]{config.whisper_model}[/cyan]"
+            f"{lang_str} — this may take a while…"
+        )
+        result = transcribe(audio_path, feed_language, config)
+        console.print(
+            f"[green]Done.[/green] Detected language: [cyan]{result.detected_language}[/cyan]"
+            f" ({result.detected_language_probability:.0%})"
+            f"  |  Duration: {result.duration:.0f}s"
+        )
+        txt_path, json_path = write_outputs(
+            result,
+            podcast_title="Local Audio",
+            episode_title=audio_path.stem,
+            episode_url="",
+            feed_url="",
+            date_published=int(audio_path.stat().st_mtime),
+            feed_language=feed_language,
+            config=config,
+            download_path=audio_path,
+        )
+        console.print("\n[bold green]Transcription saved:[/bold green]")
+        console.print(f"  Text: [link]{txt_path}[/link]")
+        console.print(f"  JSON: [link]{json_path}[/link]")
+        sys.exit(0)
 
     console.print(
         Panel(

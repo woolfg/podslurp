@@ -60,7 +60,7 @@ def search_podcasts(query: str, config: Config, max_results: int = 10) -> list[d
 def get_episodes(
     feed_id: int,
     config: Config,
-    max_results: int = 50,
+    max_results: int = 1000,
 ) -> list[dict]:
     """Return the most recent episodes for a feed.
 

@@ -115,6 +115,18 @@ All settings live in `.env`:
 | `large-v3`      | Slow        | Best          | Recommended default                            |
 | `turbo`         | Fast        | Near large-v3 | Best speed/accuracy tradeoff (GPU recommended) |
 
+### Hugging Face token warning
+
+The first time `faster-whisper` downloads a model, you may see this warning:
+
+```
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+```
+
+This is informational. Whisper models used by podslurp are public, so a Hugging Face token is usually not needed. Downloads still work without one.
+
+Set `HF_TOKEN` only if you are hitting Hugging Face rate limits, want potentially faster downloads, or are using a private/gated model.
+
 ### GPU usage
 
 Install the matching CUDA runtime, then set:

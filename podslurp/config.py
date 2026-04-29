@@ -47,7 +47,7 @@ def load_config() -> Config:
     return Config(
         api_key=api_key,
         api_secret=api_secret,
-        whisper_model=os.getenv("WHISPER_MODEL", "large-v3"),
+        whisper_model=os.getenv("WHISPER_MODEL", "small"),
         whisper_device=os.getenv("WHISPER_DEVICE", "cpu"),
         whisper_compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8"),
         output_dir=Path(os.getenv("PODSLURP_OUTPUT_DIR", "./transcriptions")),

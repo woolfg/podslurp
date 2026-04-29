@@ -84,7 +84,8 @@ Download and transcribe? [Y/n]: y
 Downloading: lex_fridman_podcast_2024-03-10_elon_musk…mp3
 100%|████████████████████| 462M/462M [01:23<00:00, 5.5MB/s]
 
-Transcribing with large-v3 (language hint: en) — this may take a while…
+Transcribing with small (language hint: en) — this may take a while…
+Transcribing: 100%|████████████████████████████████████| 30.4k/30.4k [23:42<00:00, 21.4s/s]
 Done. Detected language: en (99%)  |  Duration: 30447s
 
 Transcription saved:
@@ -100,7 +101,7 @@ All settings live in `.env`:
 | ------------------------- | ------------------ | ------------------------------------------------------------------ |
 | `PODCASTINDEX_API_KEY`    | —                  | **Required.** Your PodcastIndex API key                            |
 | `PODCASTINDEX_API_SECRET` | —                  | **Required.** Your PodcastIndex API secret                         |
-| `WHISPER_MODEL`           | `large-v3`         | Model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
+| `WHISPER_MODEL`           | `small`            | Model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
 | `WHISPER_DEVICE`          | `cpu`              | `cpu` or `cuda`                                                    |
 | `WHISPER_COMPUTE_TYPE`    | `int8`             | `int8` (CPU), `float16` (GPU), `int8_float16` (GPU, lower VRAM)    |
 | `PODSLURP_OUTPUT_DIR`     | `./transcriptions` | Where transcript files are written                                 |
@@ -111,8 +112,8 @@ All settings live in `.env`:
 | Model           | Speed (CPU) | Accuracy      | Notes                                          |
 | --------------- | ----------- | ------------- | ---------------------------------------------- |
 | `tiny` / `base` | Very fast   | Lower         | Good for quick drafts                          |
-| `small`         | Fast        | Good          | Solid for most podcasts                        |
-| `large-v3`      | Slow        | Best          | Recommended default                            |
+| `small`         | Fast        | Good          | Recommended default for most podcasts          |
+| `large-v3`      | Slow        | Best          | Highest accuracy, but much slower on CPU       |
 | `turbo`         | Fast        | Near large-v3 | Best speed/accuracy tradeoff (GPU recommended) |
 
 ### Hugging Face token warning
@@ -156,7 +157,7 @@ Episode:           Elon Musk: War, AI & the Future of Humanity
 Published:         2024-03-10
 Language (feed):   en
 Detected language: en (99%)
-Whisper model:     large-v3
+Whisper model:     small
 Duration:          30447s
 --- TRANSCRIPT ---
 
@@ -175,7 +176,7 @@ Joe Rogan: Welcome back. Today my guest is...
     "feed_language": "en",
     "detected_language": "en",
     "detected_language_probability": 0.99,
-    "whisper_model": "large-v3",
+    "whisper_model": "small",
     ...
   },
   "segments": [

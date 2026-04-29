@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from tqdm import tqdm
+
 from .config import Config
 
 
@@ -59,17 +61,32 @@ def transcribe(
         word_timestamps=False,
     )
 
-    # raw_segments is a lazy generator — force it to completion
-    segments = [
-        Segment(
-            start=s.start,
-            end=s.end,
-            text=s.text,
-            avg_logprob=s.avg_logprob,
-            no_speech_prob=s.no_speech_prob,
-        )
-        for s in raw_segments
-    ]
+    # raw_segments is a lazy generator; update progress as decoding advances.
+    segments: list[Segment] = []
+    progress_seconds = 0.0
+    with tqdm(
+        total=info.duration,
+        unit="s",
+        unit_scale=True,
+        desc="Transcribing",
+        leave=True,
+    ) as bar:
+        for s in raw_segments:
+            segments.append(
+                Segment(
+                    start=s.start,
+                    end=s.end,
+                    text=s.text,
+                    avg_logprob=s.avg_logprob,
+                    no_speech_prob=s.no_speech_prob,
+                )
+            )
+            next_progress = min(s.end, info.duration)
+            bar.update(max(0.0, next_progress - progress_seconds))
+            progress_seconds = next_progress
+
+        if progress_seconds < info.duration:
+            bar.update(info.duration - progress_seconds)
 
     return TranscriptResult(
         segments=segments,

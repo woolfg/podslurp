@@ -49,6 +49,9 @@ If you already have an audio file downloaded and just want to transcribe it, use
 make transcribe file=downloads/my_audio.mp3
 # Or optionally pass a language hint (e.g. 'en', 'de'):
 make transcribe file=downloads/my_audio.mp3 lang=en
+# With diarization speaker hints (when PODSLURP_DIARIZE=true):
+make transcribe file=downloads/my_audio.mp3 lang=de num_speakers=2
+make transcribe file=downloads/my_audio.mp3 lang=en min_speakers=1 max_speakers=4
 ```
 
 The CLI is fully interactive:
@@ -97,15 +100,20 @@ Transcription saved:
 
 All settings live in `.env`:
 
-| Variable                  | Default            | Description                                                        |
-| ------------------------- | ------------------ | ------------------------------------------------------------------ |
-| `PODCASTINDEX_API_KEY`    | —                  | **Required.** Your PodcastIndex API key                            |
-| `PODCASTINDEX_API_SECRET` | —                  | **Required.** Your PodcastIndex API secret                         |
-| `WHISPER_MODEL`           | `small`            | Model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
-| `WHISPER_DEVICE`          | `cpu`              | `cpu` or `cuda`                                                    |
-| `WHISPER_COMPUTE_TYPE`    | `int8`             | `int8` (CPU), `float16` (GPU), `int8_float16` (GPU, lower VRAM)    |
-| `PODSLURP_OUTPUT_DIR`     | `./transcriptions` | Where transcript files are written                                 |
-| `PODSLURP_DOWNLOAD_DIR`   | `./downloads`      | Where audio files are saved                                        |
+| Variable                        | Default            | Description                                                        |
+| ------------------------------- | ------------------ | ------------------------------------------------------------------ |
+| `PODCASTINDEX_API_KEY`          | —                  | **Required.** Your PodcastIndex API key                            |
+| `PODCASTINDEX_API_SECRET`       | —                  | **Required.** Your PodcastIndex API secret                         |
+| `WHISPER_MODEL`                 | `small`            | Model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
+| `WHISPER_DEVICE`                | `cpu`              | `cpu` or `cuda`                                                    |
+| `WHISPER_COMPUTE_TYPE`          | `int8`             | `int8` (CPU), `float16` (GPU), `int8_float16` (GPU, lower VRAM)    |
+| `PODSLURP_OUTPUT_DIR`           | `./transcriptions` | Where transcript files are written                                 |
+| `PODSLURP_DOWNLOAD_DIR`         | `./downloads`      | Where audio files are saved                                        |
+| `PODSLURP_DIARIZE`              | `false`            | Set to `true` to enable speaker diarization (see below)            |
+| `PYANNOTE_TOKEN`                | —                  | HuggingFace token required when `PODSLURP_DIARIZE=true`            |
+| `PODSLURP_DIARIZE_NUM_SPEAKERS` | —                  | Exact number of speakers (skips auto-detection)                    |
+| `PODSLURP_DIARIZE_MIN_SPEAKERS` | —                  | Minimum number of speakers for auto-detection                      |
+| `PODSLURP_DIARIZE_MAX_SPEAKERS` | —                  | Maximum number of speakers for auto-detection                      |
 
 ### Choosing a Whisper model
 
@@ -128,6 +136,56 @@ This is informational. Whisper models used by podslurp are public, so a Hugging 
 
 Set `HF_TOKEN` only if you are hitting Hugging Face rate limits, want potentially faster downloads, or are using a private/gated model.
 
+### Speaker diarization
+
+podslurp can identify who is speaking in each segment using [pyannote.audio](https://github.com/pyannote/pyannote-audio).
+
+**Setup:**
+
+1. Install the extra dependency:
+   ```bash
+   uv sync --extra diarize
+   ```
+2. Accept the terms of use for all gated models (requires a free HuggingFace account):
+   - [huggingface.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+   - [huggingface.co/pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) (dependency)
+   - [huggingface.co/pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) (dependency)
+3. Create a HuggingFace access token and add it to `.env`:
+   ```
+   PODSLURP_DIARIZE=true
+   PYANNOTE_TOKEN=hf_...
+   ```
+
+When enabled, speaker labels are added to both output files. In `.txt` the transcript is grouped by speaker:
+
+```
+[SPEAKER_00] Welcome back. Today my guest is...
+[SPEAKER_01] Thanks for having me.
+```
+
+In `.json`, each segment gains a `"speaker"` field:
+
+```json
+{ "start": 0.0, "end": 4.2, "text": "Welcome back.", "speaker": "SPEAKER_00", ... }
+```
+
+**CPU vs GPU:** pyannote runs on CPU without any extra configuration — no GPU required. It automatically uses CUDA if available. On CPU, diarization typically takes 2–5× real-time (a 1-hour file takes roughly 2–5 minutes), which is much faster than transcription.
+
+**Re-diarizing an existing transcript** (without re-transcribing):
+
+If you already have a `.json` transcript, you can add or redo speaker labels without running Whisper again:
+
+```bash
+# audio path is read from the JSON automatically if it hasn't moved
+make diarize json=transcriptions/my_episode.json
+
+# pass the audio explicitly if needed
+make diarize json=transcriptions/my_episode.json audio=downloads/my_episode.mp3
+
+# with a speaker count hint
+make diarize json=transcriptions/my_episode.json audio=downloads/call.mp3 num_speakers=2
+```
+
 ### GPU usage
 
 Install the matching CUDA runtime, then set:
@@ -139,13 +197,15 @@ WHISPER_COMPUTE_TYPE=float16
 
 ## Makefile targets
 
-| Command           | Description                                                      |
-| ----------------- | ---------------------------------------------------------------- |
-| `make install`    | Set up the virtual env and install all dependencies              |
-| `make run`        | Launch the interactive CLI                                       |
-| `make transcribe` | Transcribe a local audio file (`file=path/to.mp3` `[lang=code]`) |
-| `make lint`       | Run `ruff` over the source                                       |
-| `make clean`      | Remove `.venv`, `downloads/`, `transcriptions/`, caches          |
+| Command                | Description                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `make install`         | Set up the virtual env and install all dependencies                                                                       |
+| `make install-diarize` | Install with the speaker diarization extra (pyannote.audio)                                                               |
+| `make run`             | Launch the interactive CLI                                                                                                |
+| `make transcribe`      | Transcribe a local audio file (`file=path/to.mp3` `[lang=code]` `[num_speakers=N]` `[min_speakers=N]` `[max_speakers=N]`) |
+| `make diarize`         | Add speaker labels to an existing transcript (`json=path/to.json` `[audio=path/to.mp3]` `[num_speakers=N]`)               |
+| `make lint`            | Run `ruff` over the source                                                                                                |
+| `make clean`           | Remove `.venv`, `downloads/`, `transcriptions/`, caches                                                                   |
 
 ## Output files
 

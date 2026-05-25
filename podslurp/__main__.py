@@ -4,6 +4,8 @@ __main__.py — interactive CLI entry point for podslurp.
 from __future__ import annotations
 
 import sys
+from datetime import datetime
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -16,7 +18,7 @@ from .api import get_episodes, search_podcasts
 from .config import load_config
 from .downloader import download_audio
 from .output import build_stem, write_outputs
-from .transcriber import transcribe
+from .transcriber import Segment, TranscriptResult, _assign_speakers, transcribe
 
 console = Console()
 
@@ -212,6 +214,88 @@ def main() -> None:
             download_path=audio_path,
         )
         console.print("\n[bold green]Transcription saved:[/bold green]")
+        console.print(f"  Text: [link]{txt_path}[/link]")
+        console.print(f"  JSON: [link]{json_path}[/link]")
+        sys.exit(0)
+
+    if len(sys.argv) >= 3 and sys.argv[1] == "--diarize":
+        json_path = Path(sys.argv[2])
+        audio_path = Path(sys.argv[4]) if len(sys.argv) >= 5 and sys.argv[3] == "--audio" else None
+
+        if not json_path.exists() or not json_path.is_file():
+            console.print(f"[red]Error:[/red] JSON file not found: {json_path}")
+            sys.exit(1)
+
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        meta = payload.get("metadata", {})
+
+        if audio_path is None:
+            # Try to find the audio from the download_path stored in the JSON
+            stored = meta.get("download_path", "")
+            if stored:
+                audio_path = Path(stored)
+
+        if not audio_path or not audio_path.exists():
+            console.print(
+                "[red]Error:[/red] Could not locate the audio file.\n"
+                "Pass it explicitly: make diarize json=<file.json> audio=<file.mp3>"
+            )
+            sys.exit(1)
+
+        if not config.diarize:
+            console.print(
+                "[red]Error:[/red] PODSLURP_DIARIZE is not enabled in your .env.\n"
+                "Set PODSLURP_DIARIZE=true and provide a PYANNOTE_TOKEN."
+            )
+            sys.exit(1)
+
+        segments = [
+            Segment(
+                start=s["start"],
+                end=s["end"],
+                text=s["text"],
+                avg_logprob=s["avg_logprob"],
+                no_speech_prob=s["no_speech_prob"],
+                speaker=s.get("speaker"),
+            )
+            for s in payload.get("segments", [])
+        ]
+        result = TranscriptResult(
+            segments=segments,
+            detected_language=meta.get("detected_language", ""),
+            detected_language_probability=meta.get("detected_language_probability", 0.0),
+            duration=meta.get("duration_seconds", 0.0),
+        )
+
+        console.print("[bold]Running speaker diarization on existing transcript…[/bold]")
+        _assign_speakers(
+            result.segments,
+            audio_path,
+            config.pyannote_token,
+            num_speakers=config.diarize_num_speakers,
+            min_speakers=config.diarize_min_speakers,
+            max_speakers=config.diarize_max_speakers,
+        )
+        # Rebuild full_text with speaker labels
+        result.__post_init__()
+
+        import calendar
+        date_published = int(calendar.timegm(
+            datetime.fromisoformat(meta["date_published_iso"]).timetuple()
+        )) if meta.get("date_published_iso") else 0
+
+        txt_path, json_path = write_outputs(
+            result,
+            podcast_title=meta.get("podcast_title", ""),
+            episode_title=meta.get("episode_title", ""),
+            episode_url=meta.get("episode_url", ""),
+            feed_url=meta.get("feed_url", ""),
+            date_published=date_published,
+            feed_language=meta.get("feed_language"),
+            config=config,
+            download_path=audio_path,
+        )
+        console.print("\n[bold green]Diarized transcript saved:[/bold green]")
         console.print(f"  Text: [link]{txt_path}[/link]")
         console.print(f"  JSON: [link]{json_path}[/link]")
         sys.exit(0)

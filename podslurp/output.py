@@ -77,9 +77,7 @@ def write_outputs(
     txt_path.write_text(
         "\n".join(header_lines) + result.full_text,
         encoding="utf-8",
-    )
-
-    # --- .json -----------------------------------------------------------------
+    )    # --- .json -----------------------------------------------------------------
     payload = {
         "metadata": {
             "podcast_title": podcast_title,
@@ -102,6 +100,7 @@ def write_outputs(
                 "start": s.start,
                 "end": s.end,
                 "text": s.text,
+                "speaker": s.speaker,
                 "avg_logprob": s.avg_logprob,
                 "no_speech_prob": s.no_speech_prob,
             }

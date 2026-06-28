@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-diarize run lint clean diarize
+.PHONY: help install install-diarize run transcribe analyse analyze lint clean diarize
 
 help:
 	@echo "podslurp — Podcast Search, Download & Transcription CLI"
@@ -10,8 +10,9 @@ help:
 	@echo "  install          Create/update the virtual env and install all dependencies"
 	@echo "  install-diarize  Also install the speaker diarization extra (pyannote.audio)"
 	@echo "  run              Launch the interactive CLI"
-	@echo "  transcribe       Transcribe a local audio file (requires file=<path> [lang=<language>])"
+	@echo "  transcribe       Transcribe a local audio file (requires file=<path> [lang=<language>] [diarize=true|false])"
 	@echo "  diarize          Add speaker labels to an existing transcript (requires json=<path> [audio=<path>])"
+	@echo "  analyse          Calculate speaking time per speaker from a transcript JSON (requires json=<path>)"
 	@echo "  lint             Run ruff linter over the source"
 	@echo "  clean            Remove generated files (.venv, downloads, transcriptions, caches)"
 
@@ -37,7 +38,8 @@ transcribe:
 		echo "Usage: make transcribe file=<path_to_audio> [lang=<language>] [num_speakers=N] [min_speakers=N] [max_speakers=N]"; \
 		exit 1; \
 	fi
-	@PODSLURP_DIARIZE_NUM_SPEAKERS=$(num_speakers) \
+	@PODSLURP_DIARIZE=$(if $(diarize),$(diarize),) \
+	 PODSLURP_DIARIZE_NUM_SPEAKERS=$(num_speakers) \
 	 PODSLURP_DIARIZE_MIN_SPEAKERS=$(min_speakers) \
 	 PODSLURP_DIARIZE_MAX_SPEAKERS=$(max_speakers) \
 	 $(if $(lang),uv run podslurp --transcribe "$(file)" --lang "$(lang)",uv run podslurp --transcribe "$(file)")
@@ -54,6 +56,15 @@ diarize:
 	 PODSLURP_DIARIZE_MIN_SPEAKERS=$(min_speakers) \
 	 PODSLURP_DIARIZE_MAX_SPEAKERS=$(max_speakers) \
 	 $(if $(audio),uv run podslurp --diarize "$(json)" --audio "$(audio)",uv run podslurp --diarize "$(json)")
+
+analyse:
+	@if [ -z "$(json)" ]; then \
+		echo "Usage: make analyse json=<path_to_transcript.json>"; \
+		exit 1; \
+	fi
+	uv run podslurp --analyse "$(json)"
+
+analyze: analyse
 
 clean:
 	rm -rf .venv downloads transcriptions

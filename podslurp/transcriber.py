@@ -48,6 +48,8 @@ def _assign_speakers(
     num_speakers: Optional[int] = None,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None,
+    device: str = "cpu",
+    batch_size: int = 32,
 ) -> None:
     """Run pyannote diarization and tag each segment with the dominant speaker in-place."""
     try:
@@ -68,6 +70,7 @@ def _assign_speakers(
     # pyannote's crop() to raise a ValueError when a chunk slightly overshoots EOF.
     import torch
     import torchaudio  # type: ignore[import]
+    pipeline.to(torch.device(device))
     waveform, sample_rate = torchaudio.load(str(audio_path.resolve()))
     audio_file = {"waveform": waveform, "sample_rate": sample_rate, "uri": audio_path.stem}
     diarization = pipeline(
@@ -75,6 +78,7 @@ def _assign_speakers(
         num_speakers=num_speakers,
         min_speakers=min_speakers,
         max_speakers=max_speakers,
+        batch_size=batch_size,
     )
 
     # Build a list of (start, end, speaker) tuples from the diarization result.
@@ -166,6 +170,8 @@ def transcribe(
             num_speakers=config.diarize_num_speakers,
             min_speakers=config.diarize_min_speakers,
             max_speakers=config.diarize_max_speakers,
+            device=config.diarize_device,
+            batch_size=config.diarize_batch_size,
         )
 
     return TranscriptResult(

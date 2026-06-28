@@ -14,6 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
+from .analysis import analyze_transcript_file, format_duration
 from .api import get_episodes, search_podcasts
 from .config import load_config
 from .downloader import download_audio
@@ -115,6 +116,59 @@ def _show_episode_detail(ep: dict, feed: dict) -> None:
     console.print(Panel("\n".join(lines), title="Episode", border_style="cyan"))
 
 
+def _show_speaking_time(json_path: Path) -> None:
+    try:
+        analysis = analyze_transcript_file(json_path)
+    except ValueError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
+
+    metadata = analysis.metadata
+    podcast = str(metadata.get("podcast_title") or "").strip()
+    episode = str(metadata.get("episode_title") or "").strip()
+    title = " - ".join(part for part in (podcast, episode) if part)
+
+    if title:
+        console.print(f"[bold]Transcript:[/bold] {title}")
+    console.print(f"[dim]{json_path}[/dim]")
+
+    if not analysis.speakers:
+        console.print("[yellow]No segments found in transcript JSON.[/yellow]")
+        return
+
+    table = Table(box=box.SIMPLE_HEAD, show_lines=False, highlight=True)
+    table.add_column("Speaker", style="bold white")
+    table.add_column("Segments", justify="right")
+    table.add_column("Speaking time", justify="right")
+    table.add_column("Share", justify="right")
+
+    for speaker in analysis.speakers:
+        table.add_row(
+            speaker.speaker,
+            str(speaker.segments),
+            format_duration(speaker.seconds),
+            f"{speaker.percentage:.1f}%",
+        )
+
+    console.print()
+    console.print(table)
+    console.print(
+        f"[bold]Total speaking time:[/bold] "
+        f"{format_duration(analysis.total_seconds)} "
+        f"across {analysis.segment_count} segments"
+    )
+    if analysis.duration_seconds is not None:
+        console.print(
+            f"[dim]Transcript duration: "
+            f"{format_duration(analysis.duration_seconds)}[/dim]"
+        )
+    if analysis.unlabeled_segment_count:
+        console.print(
+            f"[yellow]{analysis.unlabeled_segment_count} segment(s) have no "
+            f"speaker label and are grouped as UNKNOWN.[/yellow]"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Main flow
 # ---------------------------------------------------------------------------
@@ -179,6 +233,15 @@ def _run_pipeline(ep: dict, feed: dict, config) -> None:
 
 
 def main() -> None:
+    if len(sys.argv) >= 3 and sys.argv[1] in ("--analyse", "--analyze"):
+        json_path = Path(sys.argv[2])
+        if not json_path.exists() or not json_path.is_file():
+            console.print(f"[red]Error:[/red] JSON file not found: {json_path}")
+            sys.exit(1)
+
+        _show_speaking_time(json_path)
+        sys.exit(0)
+
     config = load_config()
 
     if len(sys.argv) >= 3 and sys.argv[1] == "--transcribe":

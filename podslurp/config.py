@@ -28,6 +28,8 @@ class Config:
     diarize_num_speakers: Optional[int]
     diarize_min_speakers: Optional[int]
     diarize_max_speakers: Optional[int]
+    diarize_device: str
+    diarize_batch_size: int
 
 
 def _parse_optional_int(env_var: str) -> Optional[int]:
@@ -80,4 +82,6 @@ def load_config() -> Config:
         diarize_num_speakers=_parse_optional_int("PODSLURP_DIARIZE_NUM_SPEAKERS"),
         diarize_min_speakers=_parse_optional_int("PODSLURP_DIARIZE_MIN_SPEAKERS"),
         diarize_max_speakers=_parse_optional_int("PODSLURP_DIARIZE_MAX_SPEAKERS"),
+        diarize_device=os.getenv("PODSLURP_DIARIZE_DEVICE", os.getenv("WHISPER_DEVICE", "cpu")),
+        diarize_batch_size=int(os.getenv("PODSLURP_DIARIZE_BATCH_SIZE", "32")),
     )

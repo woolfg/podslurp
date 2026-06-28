@@ -186,6 +186,17 @@ make diarize json=transcriptions/my_episode.json audio=downloads/my_episode.mp3
 make diarize json=transcriptions/my_episode.json audio=downloads/call.mp3 num_speakers=2
 ```
 
+**Speaker-time summary:**
+
+Once a transcript has speaker labels, you can calculate speaking time per speaker
+by summing each segment's `end - start` duration:
+
+```bash
+make analyse json=transcriptions/my_episode.json
+```
+
+Segments without a speaker label are grouped as `UNKNOWN`.
+
 ### GPU usage
 
 Install the matching CUDA runtime, then set:
@@ -204,6 +215,7 @@ WHISPER_COMPUTE_TYPE=float16
 | `make run`             | Launch the interactive CLI                                                                                                |
 | `make transcribe`      | Transcribe a local audio file (`file=path/to.mp3` `[lang=code]` `[num_speakers=N]` `[min_speakers=N]` `[max_speakers=N]`) |
 | `make diarize`         | Add speaker labels to an existing transcript (`json=path/to.json` `[audio=path/to.mp3]` `[num_speakers=N]`)               |
+| `make analyse`         | Calculate speaking time per speaker from a transcript JSON (`json=path/to.json`)                                         |
 | `make lint`            | Run `ruff` over the source                                                                                                |
 | `make clean`           | Remove `.venv`, `downloads/`, `transcriptions/`, caches                                                                   |
 

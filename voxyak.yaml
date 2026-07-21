@@ -1,0 +1,38 @@
+version: 1
+
+pipelines:
+  call-summary:
+    input:
+      uses: call-recorder
+      with:
+        microphone_pattern: Q2U
+        system_pattern: 'bluez_output.*\.monitor'
+        keep_separate_tracks: true
+    transcription:
+      uses: faster-whisper
+      with:
+        model: small
+        device: cpu
+        compute_type: int8
+        language: auto
+        diarization:
+          enabled: false
+    processing:
+      - id: summary
+        uses: openai-summary
+        with:
+          model: gpt-5.6-terra
+          reasoning_effort: low
+          output_language: auto
+
+  podcast:
+    input:
+      uses: podcast-index
+    transcription:
+      uses: faster-whisper
+      with:
+        model: small
+        device: cpu
+        compute_type: int8
+        language: source
+    processing: []

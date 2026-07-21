@@ -1,26 +1,26 @@
-# secrets
+# Secrets
 .env
 
-# virtual environment
+# Virtual environments and Python caches
 .venv/
-
-# Python bytecode
 __pycache__/
 **/__pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
+.uv/
 
-# packaging / build
+# Packaging
 *.egg-info/
 dist/
 build/
-.uv/
 
-# runtime output
+# Runtime artifacts
+runs/
 downloads/
 transcriptions/
 
-# editors / OS
+# Editors and operating systems
 .DS_Store
 .idea/
 .vscode/
-

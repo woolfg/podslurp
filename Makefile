@@ -1,72 +1,66 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-diarize run transcribe analyse analyze lint clean diarize
+.PHONY: help install install-diarize validate modules podcast call transcribe diarize summarize analyze test lint clean
 
 help:
-	@echo "podslurp — Podcast Search, Download & Transcription CLI"
+	@echo "VoxYak — modular audio transcription and processing"
 	@echo ""
-	@echo "Usage: make <target>"
-	@echo ""
-	@echo "  install          Create/update the virtual env and install all dependencies"
-	@echo "  install-diarize  Also install the speaker diarization extra (pyannote.audio)"
-	@echo "  run              Launch the interactive CLI"
-	@echo "  transcribe       Transcribe a local audio file (requires file=<path> [lang=<language>] [diarize=true|false])"
-	@echo "  diarize          Add speaker labels to an existing transcript (requires json=<path> [audio=<path>])"
-	@echo "  analyse          Calculate speaking time per speaker from a transcript JSON (requires json=<path>)"
-	@echo "  lint             Run ruff linter over the source"
-	@echo "  clean            Remove generated files (.venv, downloads, transcriptions, caches)"
+	@echo "  make install          Install the application and development dependencies"
+	@echo "  make install-diarize  Install optional speaker diarization dependencies"
+	@echo "  make validate         Validate all pipeline files in pipelines/"
+	@echo "  make modules          List installed pipeline modules"
+	@echo "  make podcast          Run the podcast transcription pipeline"
+	@echo "  make call             Record, transcribe, and summarize a call"
+	@echo "  make transcribe file=<audio> [lang=<code>]"
+	@echo "  make diarize transcript=<transcript.json> [audio=<audio>]"
+	@echo "  make summarize transcript=<transcript.json> [pipeline=<name>] [output=<dir>]"
+	@echo "  make analyze transcript=<transcript.json>"
+	@echo "  make test             Run the test suite"
+	@echo "  make lint             Run Ruff"
 
 install:
-	@if [ ! -f .env ]; then \
-		cp .env.example .env; \
-		echo "Created .env from .env.example — fill in your API credentials."; \
-	fi
+	@if [ ! -f .env ]; then cp .env.example .env; echo "Created .env"; fi
 	uv sync
 
 install-diarize:
-	@if [ ! -f .env ]; then \
-		cp .env.example .env; \
-		echo "Created .env from .env.example — fill in your API credentials."; \
-	fi
+	@if [ ! -f .env ]; then cp .env.example .env; echo "Created .env"; fi
 	uv sync --extra diarize
 
-run:
-	uv run podslurp
+validate:
+	uv run voxyak pipelines validate
+
+modules:
+	uv run voxyak modules
+
+podcast:
+	uv run voxyak run podcast
+
+call:
+	uv run voxyak run call-summary
 
 transcribe:
-	@if [ -z "$(file)" ]; then \
-		echo "Usage: make transcribe file=<path_to_audio> [lang=<language>] [num_speakers=N] [min_speakers=N] [max_speakers=N]"; \
-		exit 1; \
-	fi
-	@PODSLURP_DIARIZE=$(if $(diarize),$(diarize),) \
-	 PODSLURP_DIARIZE_NUM_SPEAKERS=$(num_speakers) \
-	 PODSLURP_DIARIZE_MIN_SPEAKERS=$(min_speakers) \
-	 PODSLURP_DIARIZE_MAX_SPEAKERS=$(max_speakers) \
-	 $(if $(lang),uv run podslurp --transcribe "$(file)" --lang "$(lang)",uv run podslurp --transcribe "$(file)")
-
-lint:
-	uv run ruff check podslurp/
+	@if [ -z "$(file)" ]; then echo "Usage: make transcribe file=<audio> [lang=<code>]"; exit 1; fi
+	uv run voxyak transcribe "$(file)" $(if $(lang),--language "$(lang)",)
 
 diarize:
-	@if [ -z "$(json)" ]; then \
-		echo "Usage: make diarize json=<path_to_transcript.json> [audio=<path_to_audio>] [num_speakers=N] [min_speakers=N] [max_speakers=N]"; \
-		exit 1; \
-	fi
-	@PODSLURP_DIARIZE_NUM_SPEAKERS=$(num_speakers) \
-	 PODSLURP_DIARIZE_MIN_SPEAKERS=$(min_speakers) \
-	 PODSLURP_DIARIZE_MAX_SPEAKERS=$(max_speakers) \
-	 $(if $(audio),uv run podslurp --diarize "$(json)" --audio "$(audio)",uv run podslurp --diarize "$(json)")
+	@if [ -z "$(transcript)" ]; then echo "Usage: make diarize transcript=<transcript.json> [audio=<audio>]"; exit 1; fi
+	uv run voxyak diarize "$(transcript)" $(if $(audio),--audio "$(audio)",)
 
-analyse:
-	@if [ -z "$(json)" ]; then \
-		echo "Usage: make analyse json=<path_to_transcript.json>"; \
-		exit 1; \
-	fi
-	uv run podslurp --analyse "$(json)"
+summarize:
+	@if [ -z "$(transcript)" ]; then echo "Usage: make summarize transcript=<transcript.json> [pipeline=<name>] [output=<dir>]"; exit 1; fi
+	uv run voxyak summarize "$(transcript)" $(if $(pipeline),--pipeline "$(pipeline)",) $(if $(output),--output-dir "$(output)",)
 
-analyze: analyse
+analyze:
+	@if [ -z "$(transcript)" ]; then echo "Usage: make analyze transcript=<transcript.json>"; exit 1; fi
+	uv run voxyak analyze "$(transcript)"
+
+test:
+	uv run pytest
+
+lint:
+	uv run ruff check voxyak tests
 
 clean:
-	rm -rf .venv downloads transcriptions
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+	rm -rf .venv runs .pytest_cache .ruff_cache
+	find voxyak tests -type d -name "__pycache__" -exec rm -rf {} +
+	find voxyak tests -type f -name "*.pyc" -delete

@@ -1,0 +1,12 @@
+version: 1
+
+input:
+  uses: podcast-index
+transcription:
+  uses: faster-whisper
+  with:
+    model: small
+    device: cpu
+    compute_type: int8
+    language: source
+processing: []

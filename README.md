@@ -1,264 +1,143 @@
-# podslurp
+# VoxYak
 
-Search for a podcast episode, download the audio, and get a full text transcription — all from the command line.
+VoxYak is a local, modular audio pipeline: acquire audio, transcribe it, then run
+one or more processors such as meeting summarization or speaker-time analysis.
 
-## What it does
+## Pipeline model
 
-1. **Search** — type a podcast name; podslurp queries [PodcastIndex](https://podcastindex.org/) and shows matching feeds.
-2. **Browse** — pick the podcast, then search or scroll through its most recent episodes.
-3. **Confirm** — review the episode details before anything is downloaded.
-4. **Download** — the audio file is streamed to `downloads/` with a live progress bar.
-5. **Transcribe** — [faster-whisper](https://github.com/SYSTRAN/faster-whisper) runs locally and produces a full transcript. The language is read from the RSS feed and passed to the model as a hint (faster than auto-detection).
-6. **Save** — two files land in `transcriptions/` named after the podcast, date and episode title:
-   - `{podcast}_{YYYY-MM-DD}_{episode}.txt` — human-readable transcript with a metadata header
-   - `{podcast}_{YYYY-MM-DD}_{episode}.json` — structured output with per-segment timestamps, log-probabilities and full metadata
+Every YAML pipeline has three typed stages:
+
+1. one input module;
+2. one transcription module;
+3. zero or more ordered processor modules.
+
+VoxYak includes these modules:
+
+| Type | Module | Purpose |
+| --- | --- | --- |
+| Input | `file` | Use an existing local audio file |
+| Input | `podcast-index` | Search PodcastIndex and download an episode |
+| Input | `call-recorder` | Record microphone and system audio on Linux |
+| Transcription | `faster-whisper` | Transcribe locally, with optional diarization |
+| Processor | `speaker-time` | Calculate speaking time per speaker |
+| Processor | `openai-summary` | Create a structured meeting brief |
+
+Installed Python packages can contribute modules through the `voxyak.inputs`,
+`voxyak.transcribers`, and `voxyak.processors` entry-point groups. Plugin classes
+subclass the contracts in `voxyak.sdk` and expose a Pydantic `config_model`.
 
 ## Requirements
 
-- Python 3.9+
-- [uv](https://github.com/astral-sh/uv) (`pip install uv` or `brew install uv`)
-- A free [PodcastIndex API key](https://api.podcastindex.org/) (takes ~30 seconds to sign up)
-- A CPU or CUDA GPU (CPU works fine with the `int8` compute type)
+- Python 3.10 or newer
+- [uv](https://docs.astral.sh/uv/)
+- `ffmpeg` and `pactl` for call recording
+- PodcastIndex credentials for the podcast input
+- An OpenAI API key for cloud summaries
 
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/podslurp.git
-cd podslurp
-make install          # creates .venv, installs deps, copies .env.example → .env
+make install
 ```
 
-Then open `.env` and fill in your credentials:
+Configure credentials in `.env`. The `OPENAI_API_KEY` is required when a
+pipeline uses the `openai-summary` processor:
 
+```dotenv
+OPENAI_API_KEY=your-api-key
 ```
-PODCASTINDEX_API_KEY=your_key_here
-PODCASTINDEX_API_SECRET=your_secret_here
+
+Do not commit `.env` or share the key. After configuring the modules you use,
+validate the shipped pipelines:
+
+```bash
+make validate
+```
+
+Optional speaker diarization requires the additional dependency and access to
+the gated pyannote model:
+
+```bash
+make install-diarize
 ```
 
 ## Usage
 
 ```bash
-make run
-# or
-uv run podslurp
+# Inspect configuration and installed modules
+voxyak pipelines list
+voxyak pipelines validate
+voxyak modules
+
+# Existing local audio
+voxyak transcribe recordings/interview.mp3 --language de
+
+# Interactive podcast selection and local transcription
+voxyak run podcast
+
+# Record until Enter or Ctrl-C, then transcribe and summarize
+voxyak run call-summary
+
+# Continue after a failed cloud processor without recording again
+voxyak resume 20260721-143000-a1b2c3d4
+
+# Standalone transcript operations
+voxyak diarize runs/<run-id>/transcription/transcript.json
+make summarize transcript=runs/<run-id>/transcription/transcript.json
+voxyak analyze runs/<run-id>/transcription/transcript.json
 ```
 
-If you already have an audio file downloaded and just want to transcribe it, use:
+`make summarize` reuses the `openai-summary` prompt and model settings from the
+`call-summary` pipeline. Pass `pipeline=<name>` to select another pipeline or
+`output=<directory>` to change the default `<transcript directory>/summary`
+output location.
 
-```bash
-make transcribe file=downloads/my_audio.mp3
-# Or optionally pass a language hint (e.g. 'en', 'de'):
-make transcribe file=downloads/my_audio.mp3 lang=en
-# With diarization speaker hints (when PODSLURP_DIARIZE=true):
-make transcribe file=downloads/my_audio.mp3 lang=de num_speakers=2
-make transcribe file=downloads/my_audio.mp3 lang=en min_speakers=1 max_speakers=4
-```
-
-The CLI is fully interactive:
-
-```
-podslurp  —  Podcast Search · Download · Transcribe
-
-Search for a podcast: lex fridman
-
-  #   Podcast                    Author           Episodes   Lang
-  1   Lex Fridman Podcast        Lex Fridman         461     en
-  2   ...
-
-Select podcast number (or 's' to search again): 1
-
-Episode keyword filter (Enter = 10 most recent): elon musk
-
-  #   Episode                                   Date         Duration
-  1   Elon Musk: War, AI & the Future …         2024-03-10    8h 27m
-  2   ...
-
-Select episode number (or 'b' to go back): 1
-
-╭── Episode ────────────────────────────────────────────────────────╮
-│ Elon Musk: War, AI & the Future of Humanity                       │
-│ Podcast:  Lex Fridman Podcast                                     │
-│ Date:     March 10, 2024                                          │
-│ Duration: 8h 27m                                                  │
-╰───────────────────────────────────────────────────────────────────╯
-
-Download and transcribe? [Y/n]: y
-
-Downloading: lex_fridman_podcast_2024-03-10_elon_musk…mp3
-100%|████████████████████| 462M/462M [01:23<00:00, 5.5MB/s]
-
-Transcribing with small (language hint: en) — this may take a while…
-Transcribing: 100%|████████████████████████████████████| 30.4k/30.4k [23:42<00:00, 21.4s/s]
-Done. Detected language: en (99%)  |  Duration: 30447s
-
-Transcription saved:
-  Text: transcriptions/lex_fridman_podcast_2024-03-10_elon_musk_war_ai_the_future_of_humanity.txt
-  JSON: transcriptions/lex_fridman_podcast_2024-03-10_elon_musk_war_ai_the_future_of_humanity.json
-```
+The summary processor sends transcript text—not audio—to the OpenAI Responses
+API with API storage disabled. Selecting a pipeline containing this processor is
+explicit authorization to send that transcript text to the configured service.
 
 ## Configuration
 
-All settings live in `.env`:
+Each YAML file in `pipelines/` defines one pipeline. Its filename (without the
+extension) is the pipeline name; for example, `pipelines/meeting.yaml` defines
+the `meeting` pipeline. Module options are validated before a run starts.
+Credentials stay in environment variables and are never written to saved
+pipeline snapshots or manifests.
 
-| Variable                        | Default            | Description                                                        |
-| ------------------------------- | ------------------ | ------------------------------------------------------------------ |
-| `PODCASTINDEX_API_KEY`          | —                  | **Required.** Your PodcastIndex API key                            |
-| `PODCASTINDEX_API_SECRET`       | —                  | **Required.** Your PodcastIndex API secret                         |
-| `WHISPER_MODEL`                 | `small`            | Model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
-| `WHISPER_DEVICE`                | `cpu`              | `cpu` or `cuda`                                                    |
-| `WHISPER_COMPUTE_TYPE`          | `int8`             | `int8` (CPU), `float16` (GPU), `int8_float16` (GPU, lower VRAM)    |
-| `PODSLURP_OUTPUT_DIR`           | `./transcriptions` | Where transcript files are written                                 |
-| `PODSLURP_DOWNLOAD_DIR`         | `./downloads`      | Where audio files are saved                                        |
-| `PODSLURP_DIARIZE`              | `false`            | Set to `true` to enable speaker diarization (see below)            |
-| `PYANNOTE_TOKEN`                | —                  | HuggingFace token required when `PODSLURP_DIARIZE=true`            |
-| `PODSLURP_DIARIZE_NUM_SPEAKERS` | —                  | Exact number of speakers (skips auto-detection)                    |
-| `PODSLURP_DIARIZE_MIN_SPEAKERS` | —                  | Minimum number of speakers for auto-detection                      |
-| `PODSLURP_DIARIZE_MAX_SPEAKERS` | —                  | Maximum number of speakers for auto-detection                      |
-
-### Choosing a Whisper model
-
-| Model           | Speed (CPU) | Accuracy      | Notes                                          |
-| --------------- | ----------- | ------------- | ---------------------------------------------- |
-| `tiny` / `base` | Very fast   | Lower         | Good for quick drafts                          |
-| `small`         | Fast        | Good          | Recommended default for most podcasts          |
-| `large-v3`      | Slow        | Best          | Highest accuracy, but much slower on CPU       |
-| `turbo`         | Fast        | Near large-v3 | Best speed/accuracy tradeoff (GPU recommended) |
-
-### Hugging Face token warning
-
-The first time `faster-whisper` downloads a model, you may see this warning:
-
-```
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+```yaml
+version: 1
+input:
+  uses: file
+  with:
+    path: ./meeting.mp3
+transcription:
+  uses: faster-whisper
+  with:
+    model: small
+    language: auto
+processing:
+  - id: summary
+    uses: openai-summary
+    with:
+      model: gpt-5.6-terra
+      reasoning_effort: low
+      prompt: |
+        Summarize the main conclusions, decisions, action items, and open questions.
 ```
 
-This is informational. Whisper models used by podslurp are public, so a Hugging Face token is usually not needed. Downloads still work without one.
+Generated inputs, transcripts, processor output, a secret-redacted pipeline
+snapshot, and an atomic status manifest are stored under `runs/<run-id>/`.
+Completed stages are reused by `voxyak resume`.
 
-Set `HF_TOKEN` only if you are hitting Hugging Face rate limits, want potentially faster downloads, or are using a private/gated model.
+## Transcript format
 
-### Speaker diarization
+VoxYak writes `transcription/transcript.json` with `schema_version`, generic
+source metadata, transcription metadata, timestamped segments, and full text.
+The adjacent text file is a human-readable rendering of the same document.
 
-podslurp can identify who is speaking in each segment using [pyannote.audio](https://github.com/pyannote/pyannote-audio).
-
-**Setup:**
-
-1. Install the extra dependency:
-   ```bash
-   uv sync --extra diarize
-   ```
-2. Accept the terms of use for all gated models (requires a free HuggingFace account):
-   - [huggingface.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
-   - [huggingface.co/pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) (dependency)
-   - [huggingface.co/pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) (dependency)
-3. Create a HuggingFace access token and add it to `.env`:
-   ```
-   PODSLURP_DIARIZE=true
-   PYANNOTE_TOKEN=hf_...
-   ```
-
-When enabled, speaker labels are added to both output files. In `.txt` the transcript is grouped by speaker:
-
-```
-[SPEAKER_00] Welcome back. Today my guest is...
-[SPEAKER_01] Thanks for having me.
-```
-
-In `.json`, each segment gains a `"speaker"` field:
-
-```json
-{ "start": 0.0, "end": 4.2, "text": "Welcome back.", "speaker": "SPEAKER_00", ... }
-```
-
-**CPU vs GPU:** pyannote runs on CPU without any extra configuration — no GPU required. It automatically uses CUDA if available. On CPU, diarization typically takes 2–5× real-time (a 1-hour file takes roughly 2–5 minutes), which is much faster than transcription.
-
-**Re-diarizing an existing transcript** (without re-transcribing):
-
-If you already have a `.json` transcript, you can add or redo speaker labels without running Whisper again:
+## Development
 
 ```bash
-# audio path is read from the JSON automatically if it hasn't moved
-make diarize json=transcriptions/my_episode.json
-
-# pass the audio explicitly if needed
-make diarize json=transcriptions/my_episode.json audio=downloads/my_episode.mp3
-
-# with a speaker count hint
-make diarize json=transcriptions/my_episode.json audio=downloads/call.mp3 num_speakers=2
+make lint
+make test
 ```
-
-**Speaker-time summary:**
-
-Once a transcript has speaker labels, you can calculate speaking time per speaker
-by summing each segment's `end - start` duration:
-
-```bash
-make analyse json=transcriptions/my_episode.json
-```
-
-Segments without a speaker label are grouped as `UNKNOWN`.
-
-### GPU usage
-
-Install the matching CUDA runtime, then set:
-
-```
-WHISPER_DEVICE=cuda
-WHISPER_COMPUTE_TYPE=float16
-```
-
-## Makefile targets
-
-| Command                | Description                                                                                                               |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `make install`         | Set up the virtual env and install all dependencies                                                                       |
-| `make install-diarize` | Install with the speaker diarization extra (pyannote.audio)                                                               |
-| `make run`             | Launch the interactive CLI                                                                                                |
-| `make transcribe`      | Transcribe a local audio file (`file=path/to.mp3` `[lang=code]` `[num_speakers=N]` `[min_speakers=N]` `[max_speakers=N]`) |
-| `make diarize`         | Add speaker labels to an existing transcript (`json=path/to.json` `[audio=path/to.mp3]` `[num_speakers=N]`)               |
-| `make analyse`         | Calculate speaking time per speaker from a transcript JSON (`json=path/to.json`)                                         |
-| `make lint`            | Run `ruff` over the source                                                                                                |
-| `make clean`           | Remove `.venv`, `downloads/`, `transcriptions/`, caches                                                                   |
-
-## Output files
-
-### `.txt`
-
-```
-Podcast:           Lex Fridman Podcast
-Episode:           Elon Musk: War, AI & the Future of Humanity
-Published:         2024-03-10
-Language (feed):   en
-Detected language: en (99%)
-Whisper model:     small
-Duration:          30447s
---- TRANSCRIPT ---
-
-Joe Rogan: Welcome back. Today my guest is...
-```
-
-### `.json`
-
-```json
-{
-  "metadata": {
-    "podcast_title": "Lex Fridman Podcast",
-    "episode_title": "Elon Musk: War, AI & the Future of Humanity",
-    "date_published_iso": "2024-03-10T00:00:00+00:00",
-    "duration_seconds": 30447.0,
-    "feed_language": "en",
-    "detected_language": "en",
-    "detected_language_probability": 0.99,
-    "whisper_model": "small",
-    ...
-  },
-  "segments": [
-    { "start": 0.0, "end": 4.2, "text": "Welcome back.", "avg_logprob": -0.21, "no_speech_prob": 0.01 },
-    ...
-  ],
-  "full_text": "Welcome back. Today my guest is..."
-}
-```
-
-## License
-
-MIT

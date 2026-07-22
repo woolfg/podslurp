@@ -9,6 +9,8 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from .metadata import PipelineMetadata
+
 
 PLUGIN_API_VERSION = 1
 ModuleKind = Literal["input", "transcription", "processor"]
@@ -23,7 +25,7 @@ class AudioArtifact(BaseModel):
     path: Path
     media_type: str = "audio/mpeg"
     tracks: dict[str, Path] = Field(default_factory=dict)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: PipelineMetadata = Field(default_factory=PipelineMetadata)
 
 
 class TranscriptArtifact(BaseModel):
@@ -36,7 +38,7 @@ class TranscriptArtifact(BaseModel):
     text_path: Path
     language: str
     duration_seconds: float
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: PipelineMetadata = Field(default_factory=PipelineMetadata)
 
 
 class OutputArtifact(BaseModel):
@@ -47,7 +49,7 @@ class OutputArtifact(BaseModel):
     artifact_type: Literal["output"] = "output"
     path: Path
     media_type: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: PipelineMetadata = Field(default_factory=PipelineMetadata)
 
 
 Artifact = AudioArtifact | TranscriptArtifact | OutputArtifact

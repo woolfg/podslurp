@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from rich.console import Console
 from pydantic import ValidationError
 
 from voxyak.modules.inputs import call_recorder
@@ -60,6 +58,16 @@ def test_recorder_keeps_tracks_and_creates_merged_audio(
         def wait(self, timeout=None):
             return self.returncode
 
+    class FakeConsole:
+        responses = iter(["", "Alice, Bob", "about two", "Quarterly planning"])
+
+        @staticmethod
+        def print(*args, **kwargs):
+            pass
+
+        def input(self, prompt):
+            return next(self.responses)
+
     monkeypatch.setattr(call_recorder.subprocess, "run", fake_run)
     monkeypatch.setattr(call_recorder.subprocess, "Popen", FakeProcess)
     context = RunContext(
@@ -68,7 +76,7 @@ def test_recorder_keeps_tracks_and_creates_merged_audio(
         run_dir=tmp_path,
         stage_id="input",
         work_dir=tmp_path / "input",
-        console=Console(file=StringIO(), force_terminal=False),
+        console=FakeConsole(),
     )
     artifact = CallRecorderInput().run(
         context,
@@ -79,3 +87,7 @@ def test_recorder_keeps_tracks_and_creates_merged_audio(
     )
     assert artifact.path.read_bytes() == b"merged"
     assert set(artifact.tracks) == {"primary", "microphone", "system"}
+    assert artifact.metadata.participants == "Alice, Bob"
+    assert artifact.metadata.participant_count == "about two"
+    assert artifact.metadata.context == "Quarterly planning"
+    assert artifact.metadata.attributes["microphone_source"] == "Q2U_microphone"

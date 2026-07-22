@@ -283,6 +283,7 @@ def _summarize(args) -> None:
         text_path=transcript_path.with_suffix(".txt"),
         language=document.transcription.language,
         duration_seconds=document.transcription.duration_seconds,
+        metadata=document.source.metadata.model_copy(deep=True),
     )
     outputs = processor.run(context, artifact, [], settings)
     console.print("[bold green]Summary complete.[/bold green]")

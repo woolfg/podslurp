@@ -29,7 +29,19 @@ from voxyak.transcript import (
 
 def _artifact(tmp_path: Path) -> TranscriptArtifact:
     document = TranscriptDocument(
-        source=TranscriptSource(module="file", title="Team call", audio_path="call.mp3"),
+        source=TranscriptSource(
+            module="file",
+            title="Team call",
+            audio_path="call.mp3",
+            metadata={
+                "participants": "Sam and Alex",
+                "participant_count": "two",
+                "context": "Weekly delivery review",
+                "collection_title": "Delivery Talks",
+                "creator": "Example Host",
+                "description": "A weekly review of delivery risks.",
+            },
+        ),
         transcription=TranscriptionDetails(
             module="faster-whisper",
             model="small",
@@ -46,6 +58,7 @@ def _artifact(tmp_path: Path) -> TranscriptArtifact:
         text_path=text_path,
         language="en",
         duration_seconds=2,
+        metadata=document.source.metadata.model_copy(deep=True),
     )
 
 
@@ -91,8 +104,12 @@ def test_summary_uses_structured_responses_without_storage(
     assert calls[0]["reasoning"] == {"effort": "low"}
     assert calls[0]["model"] == "gpt-5.6-terra"
     assert "Focus especially on delivery risks." in calls[0]["input"][0]["content"]
+    assert "Weekly delivery review" in calls[0]["input"][1]["content"]
+    assert "Delivery Talks" in calls[0]["input"][1]["content"]
     payload = json.loads(outputs[0].path.read_text(encoding="utf-8"))
     assert payload["brief"]["action_items"][0]["owner"] == "Sam"
+    assert outputs[0].metadata.context == "Weekly delivery review"
+    assert outputs[0].metadata.producer_module == "openai-summary"
     assert "## Action items" in outputs[1].path.read_text(encoding="utf-8")
 
 

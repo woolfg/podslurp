@@ -24,7 +24,12 @@ def _document() -> TranscriptDocument:
         TranscriptSegment(start=3, end=4, text="Unknown"),
     ]
     return TranscriptDocument(
-        source=TranscriptSource(module="file", title="Example", audio_path="audio.mp3"),
+        source=TranscriptSource(
+            module="file",
+            title="Example",
+            audio_path="audio.mp3",
+            metadata={"title": "Example", "context": "Customer interview"},
+        ),
         transcription=TranscriptionDetails(
             module="faster-whisper",
             model="small",
@@ -42,6 +47,7 @@ def test_transcript_round_trip_and_speaker_analysis(tmp_path: Path) -> None:
     loaded = load_transcript(json_path)
     analysis = analyze_transcript(loaded)
     assert text_path.is_file()
+    assert "Context: Customer interview" in text_path.read_text(encoding="utf-8")
     assert analysis.total_seconds == 4
     assert analysis.unlabeled_segment_count == 1
     assert analysis.speakers[0].speaker == "A"

@@ -74,15 +74,17 @@ class SpeakerTimeProcessor(ProcessorModule):
             ]
         )
         markdown_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        output_metadata = transcript.metadata.model_copy(deep=True)
+        output_metadata.producer_module = "speaker-time"
         return [
             OutputArtifact(
                 path=json_path.resolve(),
                 media_type="application/json",
-                metadata={"processor": "speaker-time"},
+                metadata=output_metadata.model_copy(deep=True),
             ),
             OutputArtifact(
                 path=markdown_path.resolve(),
                 media_type="text/markdown",
-                metadata={"processor": "speaker-time"},
+                metadata=output_metadata.model_copy(deep=True),
             ),
         ]

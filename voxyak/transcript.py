@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
+
+from .metadata import PipelineMetadata, format_metadata
 
 
 class TranscriptSegment(BaseModel):
@@ -27,7 +27,7 @@ class TranscriptSource(BaseModel):
     module: str
     title: str
     audio_path: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: PipelineMetadata = Field(default_factory=PipelineMetadata)
 
 
 class TranscriptionDetails(BaseModel):
@@ -87,10 +87,11 @@ def render_transcript_text(document: TranscriptDocument) -> str:
         f"Detected language: {details.language} ({details.language_probability:.0%})",
         f"Model:             {details.model}",
         f"Duration:          {details.duration_seconds:.1f}s",
-        "",
-        "--- TRANSCRIPT ---",
-        "",
     ]
+    rendered_metadata = format_metadata(source.metadata)
+    if rendered_metadata:
+        header.extend(["", "--- SOURCE METADATA ---", "", rendered_metadata])
+    header.extend(["", "--- TRANSCRIPT ---", ""])
     return "\n".join(header) + document.full_text + "\n"
 
 

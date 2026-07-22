@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from ...metadata import PipelineMetadata
 from ...sdk import AudioArtifact, InputModule, ModuleConfig, RunContext
 
 
@@ -34,9 +35,9 @@ class FileInput(InputModule):
             path=path,
             media_type=media_type,
             tracks={"primary": path},
-            metadata={
-                "input_module": "file",
-                "title": settings.title or path.stem,
-                "language_hint": settings.language,
-            },
+            metadata=PipelineMetadata(
+                source_module="file",
+                title=settings.title or path.stem,
+                language=settings.language,
+            ),
         )

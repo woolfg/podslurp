@@ -69,8 +69,7 @@ def _language_hint(settings: FasterWhisperConfig, audio: AudioArtifact) -> str |
     if settings.language == "auto":
         return None
     if settings.language == "source":
-        value = audio.metadata.get("language_hint")
-        return str(value) if value else None
+        return audio.metadata.language
     return settings.language.split("-")[0].lower()
 
 
@@ -191,16 +190,16 @@ class FasterWhisperTranscriber(TranscriptionModule):
             context.console.print("[bold]Running speaker diarization…[/bold]")
             _assign_speakers(segments, audio.path, settings.diarization)
 
+        metadata = audio.metadata.model_copy(deep=True)
+        metadata.producer_module = "faster-whisper"
+        metadata.model = settings.model
+        metadata.language = info.language
         document = TranscriptDocument(
             source=TranscriptSource(
-                module=str(audio.metadata.get("input_module") or "unknown"),
-                title=str(audio.metadata.get("title") or audio.path.stem),
+                module=audio.metadata.source_module or "unknown",
+                title=audio.metadata.title or audio.path.stem,
                 audio_path=str(audio.path),
-                metadata={
-                    key: value
-                    for key, value in audio.metadata.items()
-                    if key not in {"input_module", "title"}
-                },
+                metadata=metadata,
             ),
             transcription=TranscriptionDetails(
                 module="faster-whisper",
@@ -218,7 +217,7 @@ class FasterWhisperTranscriber(TranscriptionModule):
             text_path=text_path.resolve(),
             language=info.language,
             duration_seconds=info.duration,
-            metadata={"title": document.source.title},
+            metadata=document.source.metadata.model_copy(deep=True),
         )
 
 

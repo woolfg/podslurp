@@ -44,7 +44,7 @@ class FakeInput(InputModule):
         return AudioArtifact(
             path=path,
             tracks={"primary": path},
-            metadata={"input_module": "fake", "title": "Test"},
+            metadata={"source_module": "fake", "title": "Test"},
         )
 
 
@@ -61,7 +61,10 @@ class FakeTranscriber(TranscriptionModule):
         type(self).calls += 1
         document = TranscriptDocument(
             source=TranscriptSource(
-                module="fake", title="Test", audio_path=str(audio.path)
+                module="fake",
+                title="Test",
+                audio_path=str(audio.path),
+                metadata=audio.metadata.model_copy(deep=True),
             ),
             transcription=TranscriptionDetails(
                 module="fake-transcriber",
@@ -79,6 +82,7 @@ class FakeTranscriber(TranscriptionModule):
             text_path=text_path,
             language="en",
             duration_seconds=1,
+            metadata=audio.metadata.model_copy(deep=True),
         )
 
 
@@ -100,7 +104,11 @@ class FlakyProcessor(ProcessorModule):
         context.work_dir.mkdir(parents=True, exist_ok=True)
         path = context.work_dir / "result.txt"
         path.write_text("done", encoding="utf-8")
-        return [OutputArtifact(path=path, media_type="text/plain")]
+        metadata = transcript.metadata.model_copy(deep=True)
+        metadata.producer_module = "flaky"
+        return [
+            OutputArtifact(path=path, media_type="text/plain", metadata=metadata)
+        ]
 
 
 @pytest.fixture
@@ -152,6 +160,8 @@ def test_failed_processor_can_resume_without_repeating_prior_stages(
     assert FakeInput.calls == 1
     assert FakeTranscriber.calls == 1
     assert FlakyProcessor.calls == 2
+    assert manifest.stages[-1].artifacts[0]["metadata"]["title"] == "Test"
+    assert manifest.stages[-1].artifacts[0]["metadata"]["producer_module"] == "flaky"
 
 
 def test_manifest_is_written_after_failure(runner: PipelineRunner) -> None:

@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from ...metadata import format_metadata
 from ...sdk import (
     ModuleConfig,
     OutputArtifact,
@@ -181,6 +182,13 @@ def _request_brief(client, text: str, settings: OpenAISummaryConfig, *, synthesi
     return _extract_brief(response)
 
 
+def _add_source_context(document: TranscriptDocument, text: str) -> str:
+    context = format_metadata(document.source.metadata)
+    if not context:
+        return text
+    return f"Source metadata:\n{context}\n\nTranscript:\n{text}"
+
+
 def _render_markdown(title: str, brief: MeetingBrief) -> str:
     lines = [f"# {title}", "", "## Overview", "", brief.overview]
     sections: list[tuple[str, list[str]]] = [
@@ -229,10 +237,20 @@ class OpenAISummaryProcessor(ProcessorModule):
         )
         client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         if len(chunks) == 1:
-            brief = _request_brief(client, chunks[0], settings, synthesis=False)
+            brief = _request_brief(
+                client,
+                _add_source_context(document, chunks[0]),
+                settings,
+                synthesis=False,
+            )
         else:
             partials = [
-                _request_brief(client, chunk, settings, synthesis=False)
+                _request_brief(
+                    client,
+                    _add_source_context(document, chunk),
+                    settings,
+                    synthesis=False,
+                )
                 for chunk in chunks
             ]
             brief = _request_brief(
@@ -263,15 +281,18 @@ class OpenAISummaryProcessor(ProcessorModule):
             _render_markdown(title, brief),
             encoding="utf-8",
         )
+        output_metadata = transcript.metadata.model_copy(deep=True)
+        output_metadata.producer_module = "openai-summary"
+        output_metadata.model = settings.model
         return [
             OutputArtifact(
                 path=json_path.resolve(),
                 media_type="application/json",
-                metadata={"processor": "openai-summary", "model": settings.model},
+                metadata=output_metadata.model_copy(deep=True),
             ),
             OutputArtifact(
                 path=markdown_path.resolve(),
                 media_type="text/markdown",
-                metadata={"processor": "openai-summary", "model": settings.model},
+                metadata=output_metadata.model_copy(deep=True),
             ),
         ]

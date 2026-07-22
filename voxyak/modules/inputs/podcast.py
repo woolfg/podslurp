@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +16,7 @@ import requests
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
+from ...metadata import PipelineMetadata
 from ...sdk import AudioArtifact, InputModule, ModuleConfig, RunContext
 
 
@@ -108,12 +111,52 @@ def _download(
                     progress.update(len(chunk))
 
 
+def _tag_audio_file(path: Path, metadata: PipelineMetadata) -> None:
+    """Embed common podcast tags without re-encoding the downloaded audio."""
+    temporary = path.with_name(f".{path.stem}.tagged{path.suffix}")
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(path),
+        "-map",
+        "0",
+        "-c",
+        "copy",
+    ]
+    tags = {
+        "title": metadata.title,
+        "album": metadata.collection_title,
+        "artist": metadata.creator,
+        "date": metadata.published_at[:10] if metadata.published_at else None,
+        "comment": metadata.description,
+        "genre": "Podcast",
+    }
+    for key, value in tags.items():
+        if value:
+            command.extend(["-metadata", f"{key}={value}"])
+    command.append(str(temporary))
+    try:
+        subprocess.run(command, check=True)
+        if not temporary.is_file() or temporary.stat().st_size == 0:
+            raise ValueError("ffmpeg did not produce tagged podcast audio.")
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
 class PodcastIndexInput(InputModule):
     config_model = PodcastIndexConfig
 
     def preflight(self, config: BaseModel) -> None:
         PodcastIndexConfig.model_validate(config)
         _credentials()
+        if shutil.which("ffmpeg") is None:
+            raise ValueError("Required command not found on PATH: ffmpeg")
 
     def run(self, context: RunContext, config: BaseModel) -> AudioArtifact:
         settings = PodcastIndexConfig.model_validate(config)
@@ -207,19 +250,32 @@ class PodcastIndexInput(InputModule):
         language_hint = (
             str(raw_language).split("-")[0].lower() if raw_language else None
         )
+        episode_title = str(episode.get("title") or audio_path.stem)
+        podcast_title = str(feed.get("title") or "")
+        podcast_author = str(episode.get("feedAuthor") or feed.get("author") or "")
+        episode_description = str(
+            episode.get("description") or episode.get("summary") or ""
+        )
+        published_at = datetime.fromtimestamp(published, tz=timezone.utc).isoformat()
+        metadata = PipelineMetadata(
+            source_module="podcast-index",
+            title=episode_title,
+            description=episode_description,
+            creator=podcast_author,
+            collection_title=podcast_title,
+            language=language_hint,
+            published_at=published_at,
+            source_url=str(episode.get("link") or ""),
+            media_url=enclosure_url,
+            attributes={
+                "episode_guid": str(episode.get("guid") or ""),
+                "feed_url": str(feed.get("url") or ""),
+            },
+        )
+        _tag_audio_file(audio_path, metadata)
         return AudioArtifact(
             path=audio_path.resolve(),
             media_type=enclosure_type or "audio/mpeg",
             tracks={"primary": audio_path.resolve()},
-            metadata={
-                "input_module": "podcast-index",
-                "title": str(episode.get("title") or audio_path.stem),
-                "language_hint": language_hint,
-                "podcast_title": str(feed.get("title") or ""),
-                "episode_url": enclosure_url,
-                "feed_url": str(feed.get("url") or ""),
-                "published_at": datetime.fromtimestamp(
-                    published, tz=timezone.utc
-                ).isoformat(),
-            },
+            metadata=metadata,
         )

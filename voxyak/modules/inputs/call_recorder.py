@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from ...meeting_metadata import collect_meeting_metadata
+from ...metadata import PipelineMetadata
 from ...sdk import AudioArtifact, InputModule, ModuleConfig, RunContext
 
 
@@ -162,6 +164,7 @@ class CallRecorderInput(InputModule):
         if not merged_path.is_file() or merged_path.stat().st_size == 0:
             raise ValueError("ffmpeg merge did not produce a usable audio file.")
 
+        context_metadata = collect_meeting_metadata(context.console)
         tracks = {
             "primary": merged_path.resolve(),
             "microphone": microphone_path.resolve(),
@@ -177,11 +180,13 @@ class CallRecorderInput(InputModule):
             path=merged_path.resolve(),
             media_type=media_type,
             tracks=tracks,
-            metadata={
-                "input_module": "call-recorder",
-                "title": base.name,
-                "language_hint": None,
-                "microphone_source": microphone_source,
-                "system_source": system_source,
-            },
+            metadata=PipelineMetadata(
+                source_module="call-recorder",
+                title=base.name,
+                **context_metadata,
+                attributes={
+                    "microphone_source": microphone_source,
+                    "system_source": system_source,
+                },
+            ),
         )

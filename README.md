@@ -92,6 +92,22 @@ voxyak analyze runs/<run-id>/transcription/transcript.json
 `output=<directory>` to change the default `<transcript directory>/summary`
 output location.
 
+After a call recording stops, VoxYak asks for optional free-text meeting
+metadata: participants, number of speakers, and a one-line context. Press Enter
+to skip any answer. The values are saved in the transcript source metadata,
+shown in the text transcript, and supplied to the summary processor as context.
+
+Podcast downloads are tagged with the episode title, podcast title, author,
+publication date, description, and `Podcast` genre. PodcastIndex episode metadata
+is also preserved in the transcript source metadata and supplied as context when
+the transcript is summarized.
+
+All stages exchange the same versioned metadata envelope. Its common fields are
+`title`, `description`, `context`, `participants`, `participant_count`,
+`creator`, `collection_title`, `language`, `published_at`, `source_url`, and
+`media_url`. Modules can keep source-specific values in `attributes`; downstream
+stages receive a writable copy of the same metadata object.
+
 The summary processor sends transcript text—not audio—to the OpenAI Responses
 API with API storage disabled. Selecting a pipeline containing this processor is
 explicit authorization to send that transcript text to the configured service.

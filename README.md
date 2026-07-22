@@ -84,29 +84,31 @@ explicit authorization to send that transcript text to the configured service.
 
 ## Configuration
 
-`voxyak.yaml` contains the bundled podcast and call-summary pipelines. Module
-options are validated before a run starts. Credentials stay in environment
-variables and are never written to saved pipeline snapshots or manifests.
+Each YAML file in `pipelines/` defines one pipeline. Its filename (without the
+extension) is the pipeline name; for example, `pipelines/meeting.yaml` defines
+the `meeting` pipeline. Module options are validated before a run starts.
+Credentials stay in environment variables and are never written to saved
+pipeline snapshots or manifests.
 
 ```yaml
 version: 1
-pipelines:
-  meeting:
-    input:
-      uses: file
-      with:
-        path: ./meeting.mp3
-    transcription:
-      uses: faster-whisper
-      with:
-        model: small
-        language: auto
-    processing:
-      - id: summary
-        uses: openai-summary
-        with:
-          model: gpt-5.6-terra
-          reasoning_effort: low
+input:
+  uses: file
+  with:
+    path: ./meeting.mp3
+transcription:
+  uses: faster-whisper
+  with:
+    model: small
+    language: auto
+processing:
+  - id: summary
+    uses: openai-summary
+    with:
+      model: gpt-5.6-terra
+      reasoning_effort: low
+      prompt: |
+        Summarize the main conclusions, decisions, action items, and open questions.
 ```
 
 Generated inputs, transcripts, processor output, a secret-redacted pipeline

@@ -7,7 +7,7 @@ help:
 	@echo ""
 	@echo "  make install          Install the application and development dependencies"
 	@echo "  make install-diarize  Install optional speaker diarization dependencies"
-	@echo "  make validate         Validate all pipelines in voxyak.yaml"
+	@echo "  make validate         Validate all pipeline files in pipelines/"
 	@echo "  make modules          List installed pipeline modules"
 	@echo "  make podcast          Run the podcast transcription pipeline"
 	@echo "  make call             Record, transcribe, and summarize a call"

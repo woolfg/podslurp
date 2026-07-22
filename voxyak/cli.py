@@ -41,7 +41,7 @@ def _parser() -> argparse.ArgumentParser:
         "--config",
         type=Path,
         default=default_config_path(),
-        help="Pipeline YAML file (default: voxyak.yaml or VOXYAK_CONFIG).",
+        help="Pipeline YAML file or directory (default: pipelines or VOXYAK_CONFIG).",
     )
     parser.add_argument(
         "--runs-dir",

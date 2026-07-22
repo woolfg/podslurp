@@ -12,7 +12,7 @@ from typing import Any, Callable, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from .config import PipelineDefinition, VoxYakConfig, config_snapshot, load_config
+from .config import PipelineDefinition, VoxYakConfig, config_snapshot, load_pipeline
 from .registry import ModuleRegistry
 from .sdk import (
     Artifact,
@@ -156,7 +156,7 @@ class PipelineRunner:
         run_id = datetime.now().strftime("%Y%m%d-%H%M%S") + f"-{uuid.uuid4().hex[:8]}"
         run_dir = (self.runs_dir / run_id).resolve()
         run_dir.mkdir(parents=True, exist_ok=False)
-        snapshot = config_snapshot(name, pipeline)
+        snapshot = config_snapshot(pipeline)
         (run_dir / "pipeline.yaml").write_text(
             yaml.safe_dump(snapshot, sort_keys=False, allow_unicode=True),
             encoding="utf-8",
@@ -184,14 +184,7 @@ class PipelineRunner:
         run_dir = supplied if supplied.is_dir() else self.runs_dir / supplied
         run_dir = run_dir.resolve()
         manifest = self._load_manifest(run_dir)
-        snapshot = load_config(run_dir / "pipeline.yaml")
-        try:
-            pipeline = snapshot.pipelines[manifest.pipeline_name]
-        except KeyError as exc:
-            raise PipelineRunError(
-                "Saved pipeline snapshot does not contain the manifest pipeline.",
-                run_id=manifest.run_id,
-            ) from exc
+        pipeline = load_pipeline(run_dir / "pipeline.yaml")
         resolved = self.resolve(pipeline)
         records = {record.id: record for record in manifest.stages}
         expected_ids = [item.id for item in resolved.all_modules()]

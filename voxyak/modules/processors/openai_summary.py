@@ -33,12 +33,19 @@ class MeetingBrief(BaseModel):
     open_questions: list[str]
 
 
+_DEFAULT_SUMMARY_PROMPT = (
+    "Create a concise meeting brief covering the important points, decisions, "
+    "action items, and unresolved questions."
+)
+
+
 class OpenAISummaryConfig(ModuleConfig):
     model: str = "gpt-5.6-terra"
     reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = (
         "low"
     )
     output_language: str = "auto"
+    prompt: str = Field(default=_DEFAULT_SUMMARY_PROMPT, min_length=1)
     max_input_tokens: int = Field(default=200_000, ge=1_000)
     max_output_tokens: int = Field(default=8_000, ge=256)
 
@@ -133,11 +140,11 @@ def _extract_brief(response) -> MeetingBrief:
     raise ValueError(f"OpenAI returned no structured meeting brief (status: {status}).")
 
 
-def _instructions(output_language: str, *, synthesis: bool) -> str:
+def _instructions(settings: OpenAISummaryConfig, *, synthesis: bool) -> str:
     language = (
         "Use the same language as the supplied transcript."
-        if output_language == "auto"
-        else f"Write the result in {output_language}."
+        if settings.output_language == "auto"
+        else f"Write the result in {settings.output_language}."
     )
     source_description = (
         "The input contains partial briefs from consecutive transcript chunks. "
@@ -146,6 +153,7 @@ def _instructions(output_language: str, *, synthesis: bool) -> str:
         else "The input is a timestamped transcript or transcript chunk."
     )
     return (
+        f"{settings.prompt.strip()} "
         "Create an accurate meeting brief grounded only in the supplied input. "
         f"{source_description} {language} "
         "Include the overview, important points, explicit decisions, explicit action "
@@ -164,10 +172,7 @@ def _request_brief(client, text: str, settings: OpenAISummaryConfig, *, synthesi
         input=[
             {
                 "role": "developer",
-                "content": _instructions(
-                    settings.output_language,
-                    synthesis=synthesis,
-                ),
+                "content": _instructions(settings, synthesis=synthesis),
             },
             {"role": "user", "content": text},
         ],

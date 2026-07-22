@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from voxyak.config import VoxYakConfig, load_config, redact_secrets
+from voxyak.config import PipelineFile, load_config, redact_secrets
 from voxyak.registry import ModuleRegistry, RegistryError
 from voxyak.sdk import AudioArtifact, InputModule, ModuleConfig, RunContext
 
@@ -22,7 +22,7 @@ class ExampleInput(InputModule):
 
 
 def test_shipped_configuration_parses() -> None:
-    config = load_config(Path("voxyak.yaml"))
+    config = load_config(Path("pipelines"))
     assert set(config.pipelines) == {"call-summary", "podcast"}
     assert config.pipelines["call-summary"].processing[0].uses == "openai-summary"
 
@@ -30,19 +30,15 @@ def test_shipped_configuration_parses() -> None:
 def test_duplicate_processor_ids_are_rejected() -> None:
     raw = {
         "version": 1,
-        "pipelines": {
-            "bad": {
-                "input": {"uses": "file", "with": {"path": "audio.mp3"}},
-                "transcription": {"uses": "faster-whisper"},
-                "processing": [
-                    {"id": "same", "uses": "speaker-time"},
-                    {"id": "same", "uses": "speaker-time"},
-                ],
-            }
-        },
+        "input": {"uses": "file", "with": {"path": "audio.mp3"}},
+        "transcription": {"uses": "faster-whisper"},
+        "processing": [
+            {"id": "same", "uses": "speaker-time"},
+            {"id": "same", "uses": "speaker-time"},
+        ],
     }
     with pytest.raises(ValidationError, match="Processor ids must be unique"):
-        VoxYakConfig.model_validate(raw)
+        PipelineFile.model_validate(raw)
 
 
 def test_module_options_are_strict() -> None:
@@ -104,4 +100,10 @@ def test_secret_redaction_is_recursive() -> None:
 
 def test_wrong_pipeline_version_is_rejected() -> None:
     with pytest.raises(ValidationError):
-        VoxYakConfig.model_validate({"version": 2, "pipelines": {}})
+        PipelineFile.model_validate(
+            {
+                "version": 2,
+                "input": {"uses": "file"},
+                "transcription": {"uses": "faster-whisper"},
+            }
+        )

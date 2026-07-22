@@ -36,31 +36,49 @@ class PipelineDefinition(BaseModel):
         return self
 
 
+class PipelineFile(PipelineDefinition):
+    version: Literal[1]
+
+
 class VoxYakConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    version: Literal[1]
     pipelines: dict[str, PipelineDefinition]
 
 
 def default_config_path() -> Path:
-    return Path(os.getenv("VOXYAK_CONFIG", "voxyak.yaml"))
+    return Path(os.getenv("VOXYAK_CONFIG", "pipelines"))
 
 
 def default_runs_dir() -> Path:
     return Path(os.getenv("VOXYAK_RUNS_DIR", "runs"))
 
 
-def load_config(path: Path) -> VoxYakConfig:
+def load_pipeline(path: Path) -> PipelineFile:
     if not path.is_file():
-        raise ValueError(f"Configuration file not found: {path}")
+        raise ValueError(f"Pipeline file not found: {path}")
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise ValueError(f"Invalid YAML in {path}: {exc}") from exc
     if not isinstance(raw, dict):
         raise ValueError(f"Configuration root must be an object: {path}")
-    return VoxYakConfig.model_validate(raw)
+    return PipelineFile.model_validate(raw)
+
+
+def load_config(path: Path) -> VoxYakConfig:
+    """Load one pipeline file or every pipeline file in a directory."""
+    if path.is_file():
+        paths = [path]
+    elif path.is_dir():
+        paths = sorted((*path.glob("*.yaml"), *path.glob("*.yml")))
+    else:
+        raise ValueError(f"Pipeline path not found: {path}")
+
+    pipelines = {
+        pipeline_path.stem: load_pipeline(pipeline_path) for pipeline_path in paths
+    }
+    return VoxYakConfig(pipelines=pipelines)
 
 
 _SECRET_MARKERS = ("api_key", "secret", "token", "password", "credential")
@@ -82,11 +100,9 @@ def redact_secrets(value: Any) -> Any:
     return value
 
 
-def config_snapshot(name: str, pipeline: PipelineDefinition) -> dict[str, Any]:
+def config_snapshot(pipeline: PipelineDefinition) -> dict[str, Any]:
     raw = {
         "version": 1,
-        "pipelines": {
-            name: pipeline.model_dump(mode="json", by_alias=True),
-        },
+        **pipeline.model_dump(mode="json", by_alias=True, exclude={"version"}),
     }
     return redact_secrets(raw)

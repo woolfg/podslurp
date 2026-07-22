@@ -83,12 +83,13 @@ def test_summary_uses_structured_responses_without_storage(
         context,
         _artifact(tmp_path),
         [],
-        OpenAISummaryConfig(),
+        OpenAISummaryConfig(prompt="Focus especially on delivery risks."),
     )
     assert len(calls) == 1
     assert calls[0]["store"] is False
     assert calls[0]["reasoning"] == {"effort": "low"}
     assert calls[0]["model"] == "gpt-5.6-terra"
+    assert "Focus especially on delivery risks." in calls[0]["input"][0]["content"]
     payload = json.loads(outputs[0].path.read_text(encoding="utf-8"))
     assert payload["brief"]["action_items"][0]["owner"] == "Sam"
     assert "## Action items" in outputs[1].path.read_text(encoding="utf-8")

@@ -83,8 +83,14 @@ voxyak resume 20260721-143000-a1b2c3d4
 
 # Standalone transcript operations
 voxyak diarize runs/<run-id>/transcription/transcript.json
+make summarize transcript=runs/<run-id>/transcription/transcript.json
 voxyak analyze runs/<run-id>/transcription/transcript.json
 ```
+
+`make summarize` reuses the `openai-summary` prompt and model settings from the
+`call-summary` pipeline. Pass `pipeline=<name>` to select another pipeline or
+`output=<directory>` to change the default `<transcript directory>/summary`
+output location.
 
 The summary processor sends transcript text—not audio—to the OpenAI Responses
 API with API storage disabled. Selecting a pipeline containing this processor is

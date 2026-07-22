@@ -9,6 +9,7 @@ import openai
 import pytest
 from rich.console import Console
 
+from voxyak.cli import main
 from voxyak.modules.processors import openai_summary
 from voxyak.modules.processors.openai_summary import (
     ActionItem,
@@ -173,3 +174,45 @@ def test_long_transcript_uses_map_reduce(
     )
     assert len(calls) == 3
     assert "partial briefs" in calls[-1]["input"][0]["content"]
+
+
+def test_summarize_command_reuses_pipeline_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+    brief = MeetingBrief(
+        overview="Standalone summary",
+        key_points=[],
+        decisions=[],
+        action_items=[],
+        open_questions=[],
+    )
+
+    class Responses:
+        def parse(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(output_parsed=brief)
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        openai,
+        "OpenAI",
+        lambda **kwargs: SimpleNamespace(responses=Responses()),
+    )
+    output_dir = tmp_path / "summary"
+
+    result = main(
+        [
+            "--config",
+            "pipelines",
+            "summarize",
+            str(_artifact(tmp_path).path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 0
+    assert (output_dir / "summary.json").is_file()
+    assert (output_dir / "summary.md").is_file()
+    assert "Prioritize the main topics" in calls[0]["input"][0]["content"]

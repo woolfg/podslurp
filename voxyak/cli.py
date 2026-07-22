@@ -26,6 +26,7 @@ from .modules.transcribers.faster_whisper import (
 )
 from .pipeline import PipelineRunError, PipelineRunner
 from .registry import RegistryError, default_registry
+from .sdk import RunContext, TranscriptArtifact
 from .transcript import load_transcript
 
 
@@ -92,6 +93,21 @@ def _parser() -> argparse.ArgumentParser:
     diarize.add_argument("--min-speakers", type=int)
     diarize.add_argument("--max-speakers", type=int)
     diarize.add_argument("--device")
+
+    summarize = commands.add_parser(
+        "summarize", help="Summarize an existing VoxYak transcript."
+    )
+    summarize.add_argument("transcript", type=Path)
+    summarize.add_argument(
+        "--pipeline",
+        default="call-summary",
+        help="Pipeline providing the openai-summary settings (default: call-summary).",
+    )
+    summarize.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Summary output directory (default: <transcript directory>/summary).",
+    )
 
     analyze = commands.add_parser(
         "analyze", help="Calculate speaker time from a VoxYak transcript."
@@ -217,6 +233,63 @@ def _analyze(args) -> None:
     console.print(f"Total: {format_duration(analysis.total_seconds)}")
 
 
+def _summarize(args) -> None:
+    document = load_transcript(args.transcript)
+    config = load_config(args.config)
+    try:
+        pipeline = config.pipelines[args.pipeline]
+    except KeyError as exc:
+        available = ", ".join(sorted(config.pipelines)) or "none"
+        raise ValueError(
+            f"Unknown pipeline {args.pipeline!r}. Available: {available}."
+        ) from exc
+
+    processors = [
+        item for item in pipeline.processing if item.uses == "openai-summary"
+    ]
+    if not processors:
+        raise ValueError(
+            f"Pipeline {args.pipeline!r} has no openai-summary processor."
+        )
+    if len(processors) > 1:
+        raise ValueError(
+            f"Pipeline {args.pipeline!r} has multiple openai-summary processors."
+        )
+
+    processor_spec = processors[0]
+    descriptor = default_registry().descriptor("processor", "openai-summary")
+    processor = descriptor.module_class()
+    settings = descriptor.module_class.config_model.model_validate(
+        processor_spec.options
+    )
+    processor.preflight(settings)
+
+    transcript_path = args.transcript.resolve()
+    output_dir = (
+        args.output_dir.resolve()
+        if args.output_dir
+        else transcript_path.parent / "summary"
+    )
+    context = RunContext(
+        run_id=f"standalone-summary-{transcript_path.stem}",
+        pipeline_name=args.pipeline,
+        run_dir=output_dir.parent,
+        stage_id=f"processing.{processor_spec.id}",
+        work_dir=output_dir,
+        console=console,
+    )
+    artifact = TranscriptArtifact(
+        path=transcript_path,
+        text_path=transcript_path.with_suffix(".txt"),
+        language=document.transcription.language,
+        duration_seconds=document.transcription.duration_seconds,
+    )
+    outputs = processor.run(context, artifact, [], settings)
+    console.print("[bold green]Summary complete.[/bold green]")
+    for output in outputs:
+        console.print(output.path)
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     parser = _parser()
@@ -237,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
             _transcribe(args)
         elif args.command == "diarize":
             _diarize(args)
+        elif args.command == "summarize":
+            _summarize(args)
         elif args.command == "analyze":
             _analyze(args)
         return 0

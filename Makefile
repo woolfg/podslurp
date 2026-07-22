@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-diarize validate modules podcast call transcribe diarize analyze test lint clean
+.PHONY: help install install-diarize validate modules podcast call transcribe diarize summarize analyze test lint clean
 
 help:
 	@echo "VoxYak — modular audio transcription and processing"
@@ -13,6 +13,7 @@ help:
 	@echo "  make call             Record, transcribe, and summarize a call"
 	@echo "  make transcribe file=<audio> [lang=<code>]"
 	@echo "  make diarize transcript=<transcript.json> [audio=<audio>]"
+	@echo "  make summarize transcript=<transcript.json> [pipeline=<name>] [output=<dir>]"
 	@echo "  make analyze transcript=<transcript.json>"
 	@echo "  make test             Run the test suite"
 	@echo "  make lint             Run Ruff"
@@ -44,6 +45,10 @@ transcribe:
 diarize:
 	@if [ -z "$(transcript)" ]; then echo "Usage: make diarize transcript=<transcript.json> [audio=<audio>]"; exit 1; fi
 	uv run voxyak diarize "$(transcript)" $(if $(audio),--audio "$(audio)",)
+
+summarize:
+	@if [ -z "$(transcript)" ]; then echo "Usage: make summarize transcript=<transcript.json> [pipeline=<name>] [output=<dir>]"; exit 1; fi
+	uv run voxyak summarize "$(transcript)" $(if $(pipeline),--pipeline "$(pipeline)",) $(if $(output),--output-dir "$(output)",)
 
 analyze:
 	@if [ -z "$(transcript)" ]; then echo "Usage: make analyze transcript=<transcript.json>"; exit 1; fi

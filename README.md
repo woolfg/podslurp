@@ -40,7 +40,15 @@ subclass the contracts in `voxyak.sdk` and expose a Pydantic `config_model`.
 make install
 ```
 
-Fill in `.env`, then validate the shipped configuration:
+Configure credentials in `.env`. The `OPENAI_API_KEY` is required when a
+pipeline uses the `openai-summary` processor:
+
+```dotenv
+OPENAI_API_KEY=your-api-key
+```
+
+Do not commit `.env` or share the key. After configuring the modules you use,
+validate the shipped pipelines:
 
 ```bash
 make validate
